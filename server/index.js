@@ -168,15 +168,32 @@ app.get('/api/employees', async (req, res) => {
         const [rows] = await dbConnection.execute(query);
 
         // Parse rolePermissions JSON
-        const employees = rows.map(emp => ({
-            ...emp,
-            rolePermissions: typeof emp.rolePermissions === 'string' ? JSON.parse(emp.rolePermissions || '{}') : emp.rolePermissions
-        }));
+        const employees = rows.map(emp => {
+            try {
+                // DEBUG LOGGING
+                console.log(`Processing emp ${emp.id}: rolePermissions type=${typeof emp.rolePermissions}, value=${emp.rolePermissions}`);
+
+                let parsedPermissions = {};
+                if (typeof emp.rolePermissions === 'string') {
+                    parsedPermissions = JSON.parse(emp.rolePermissions || '{}');
+                } else if (emp.rolePermissions && typeof emp.rolePermissions === 'object') {
+                    parsedPermissions = emp.rolePermissions;
+                }
+
+                return {
+                    ...emp,
+                    rolePermissions: parsedPermissions
+                };
+            } catch (e) {
+                console.error(`Error parsing permissions for emp ${emp.id}:`, e);
+                return { ...emp, rolePermissions: {} };
+            }
+        });
 
         res.json(employees);
     } catch (error) {
-        console.error('Error fetching employees:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        console.error('Error fetching employees:', error.message, error.stack);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 });
 
@@ -323,10 +340,14 @@ app.post('/api/employees', async (req, res) => {
         ]);
 
         // Send Welcome Email (Non-blocking)
-        // Fetch role name for email
-        const [roleRows] = await dbConnection.query('SELECT name FROM roles WHERE id = ?', [roleId]);
+        // Fetch role name and permissions for email
+        const [roleRows] = await dbConnection.query('SELECT name, permissions FROM roles WHERE id = ?', [roleId]);
         const roleName = roleRows[0]?.name || 'Employee';
-        sendWelcomeEmail({ fullName, email, role: roleName });
+        const rolePermissions = roleRows[0]?.permissions
+            ? (typeof roleRows[0].permissions === 'string' ? JSON.parse(roleRows[0].permissions) : roleRows[0].permissions)
+            : {};
+
+        sendWelcomeEmail({ fullName, email, role: roleName, permissions: rolePermissions });
 
         res.status(201).json({ message: 'Employee created successfully', employeeId });
     } catch (error) {
