@@ -347,7 +347,7 @@ app.post('/api/employees', async (req, res) => {
             ? (typeof roleRows[0].permissions === 'string' ? JSON.parse(roleRows[0].permissions) : roleRows[0].permissions)
             : {};
 
-        sendWelcomeEmail({ fullName, email, role: roleName, permissions: rolePermissions });
+        sendWelcomeEmail({ id: employeeId, fullName, email, role: roleName, permissions: rolePermissions });
 
         res.status(201).json({ message: 'Employee created successfully', employeeId });
     } catch (error) {
@@ -436,14 +436,29 @@ app.post('/api/login', async (req, res) => {
             return res.status(403).json({ error: 'Access denied: Account is inactive' });
         }
 
-        // Parse permissions
-        const permissions = typeof employee.permissions === 'string' ? JSON.parse(employee.permissions || '{}') : employee.permissions;
+        // Parse permissions safely
+        let permissions = {};
+        try {
+            permissions = typeof employee.permissions === 'string'
+                ? JSON.parse(employee.permissions || '{}')
+                : (employee.permissions || {});
+        } catch (e) {
+            console.error(`Error parsing permissions for user ${email}:`, e);
+            permissions = {};
+        }
 
         if (!permissions?.adminPanel?.enabled) {
             return res.status(403).json({ error: 'Access denied: Admin Panel permission required' });
         }
 
-        res.json({ message: 'Login successful', user: employee });
+        // Return user data with parsed permissions
+        res.json({
+            message: 'Login successful',
+            user: {
+                ...employee,
+                permissions
+            }
+        });
     } catch (error) {
         console.error('Error logging in:', error);
         res.status(500).json({ error: 'Internal Server Error' });

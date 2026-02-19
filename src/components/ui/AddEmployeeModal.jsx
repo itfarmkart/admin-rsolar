@@ -23,14 +23,14 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         const fetchData = async () => {
             try {
                 // Fetch Departments
-                const deptResponse = await fetch('http://localhost:5002/api/departments');
+                const deptResponse = await fetch('/api/departments');
                 if (deptResponse.ok) {
                     const deptData = await deptResponse.json();
                     setDepartments(deptData);
                 }
 
                 // Fetch Roles
-                const roleResponse = await fetch('http://localhost:5002/api/roles');
+                const roleResponse = await fetch('/api/roles');
                 if (roleResponse.ok) {
                     const roleData = await roleResponse.json();
                     setRoles(roleData);
@@ -69,7 +69,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('http://localhost:5002/api/employees', {
+            const response = await fetch('/api/employees', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

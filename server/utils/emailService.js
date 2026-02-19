@@ -1,5 +1,6 @@
 
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 // Configure transporter
 const transporter = nodemailer.createTransport({
@@ -22,19 +23,19 @@ const sendWelcomeEmail = async (employee) => {
         console.log('---------------------------------------------------');
         console.log('Simulating Welcome Email (No SMTP Credentials Set)');
         console.log(`To: ${employee.email}`);
-        console.log(`Subject: Welcome to R-Solar!`);
+        console.log(`Subject: Welcome to r-solar!`);
         console.log(`Body: Hello ${employee.fullName}, welcome to the team...`);
         console.log('---------------------------------------------------');
         return;
     }
 
-    const { fullName, email, role, permissions } = employee;
+    const { id, fullName, email, role, permissions } = employee;
 
     // Generate Permissions List
     const permissionItems = [];
-    if (permissions?.crm?.enabled) permissionItems.push('<li><strong>CRM Access</strong> - Customer & Operations Management</li>');
-    if (permissions?.missionControl?.enabled) permissionItems.push('<li><strong>Mission Control</strong> - Project Pipeline Tracking</li>');
-    if (permissions?.adminPanel?.enabled) permissionItems.push('<li><strong>Admin Panel</strong> - System Configuration & User Management</li>');
+    if (permissions?.crm?.enabled) permissionItems.push('<li><strong>CRM Access</strong> - <a href="https://crm.myrsolar.com/" style="color: #72bf44; text-decoration: none;">https://crm.myrsolar.com/</a> - Customer & Operations Management</li>');
+    if (permissions?.missionControl?.enabled) permissionItems.push('<li><strong>Mission Control</strong> - <a href="https://missioncontrol.myrsolar.com/" style="color: #72bf44; text-decoration: none;">https://missioncontrol.myrsolar.com/</a> - Project Pipeline Tracking</li>');
+    if (permissions?.adminPanel?.enabled) permissionItems.push('<li><strong>Admin Panel</strong> - <a href="https://admin.myrsolar.com/" style="color: #72bf44; text-decoration: none;">https://admin.myrsolar.com/</a> - System Configuration & User Management</li>');
 
     // Default if no specific modules enabled
     if (permissionItems.length === 0) {
@@ -45,22 +46,32 @@ const sendWelcomeEmail = async (employee) => {
     const permissionListText = permissionItems.map(item => item.replace(/<[^>]*>/g, '')).join('\n- ');
 
     const mailOptions = {
-        from: `"R-Solar Admin" <${process.env.SMTP_USER}>`,
+        from: `"r-solar Admin" <${process.env.SMTP_USER}>`,
         to: email,
-        subject: 'Welcome to R-Solar - Your Account is Ready',
-        text: `Hello ${fullName},\n\nWelcome to R-Solar! We are excited to have you on board as a ${role}.\n\nYour account has been created with access to:\n${permissionListText}\n\nBest regards,\nR-Solar IT Team`,
+        cc: 'akshayp@farmkart.com',
+        subject: `${id} - ${fullName} - r-solar OS`,
+        text: `Hello ${fullName},\n\nWelcome to r-solar! We are excited to have you on board as a ${role}.\n\nYour account has been created with access to:\n${permissionListText}\n\nBest regards,\nr-solar IT Team`,
         html: `
             <div style="font-family: Arial, sans-serif; color: #333;">
-                <h2 style="color: #4ade80;">Welcome to R-Solar!</h2>
+                <h2 style="color: #72bf44;">Welcome to r-solar!</h2>
                 <p>Hello <strong>${fullName}</strong>,</p>
                 <p>We are excited to have you on board as a <strong>${role}</strong>.</p>
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
                 <h3>Your Access Permissions:</h3>
                 ${permissionListHtml}
                 <br />
-                <p>Best regards,<br /><strong>R-Solar IT Team</strong></p>
+                <p>Best regards,<br /><strong>r-solar IT Team</strong></p>
+                <br />
+                <img src="cid:rsolarlogo" alt="r-solar logo" style="width: 150px; height: auto;" />
             </div>
         `,
+        attachments: [
+            {
+                filename: 'r-solar-logo.png',
+                path: path.join(__dirname, '../../src/assets/r-solar-logo.png'),
+                cid: 'rsolarlogo'
+            }
+        ]
     };
 
     try {

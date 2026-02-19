@@ -15,7 +15,7 @@ const RoleTemplates = () => {
     useEffect(() => {
         const fetchRoles = async () => {
             try {
-                const response = await fetch('http://localhost:5002/api/roles');
+                const response = await fetch('/api/roles');
                 if (response.ok) {
                     const data = await response.json();
                     setRoles(data);

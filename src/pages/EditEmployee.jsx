@@ -26,17 +26,17 @@ const EditEmployee = () => {
         const fetchData = async () => {
             try {
                 // Fetch Departments
-                const deptRes = await fetch('http://localhost:5002/api/departments');
+                const deptRes = await fetch('/api/departments');
                 const deptData = await deptRes.json();
                 setDepartments(deptData);
 
                 // Fetch Roles
-                const roleRes = await fetch('http://localhost:5002/api/roles');
+                const roleRes = await fetch('/api/roles');
                 const roleData = await roleRes.json();
                 setRoles(roleData);
 
                 // Fetch Employee
-                const empRes = await fetch(`http://localhost:5002/api/employees/${id}`);
+                const empRes = await fetch(`/api/employees/${id}`);
                 if (!empRes.ok) throw new Error('Employee not found');
                 const empData = await empRes.json();
 
@@ -70,7 +70,7 @@ const EditEmployee = () => {
 
         setSaving(true);
         try {
-            const res = await fetch(`http://localhost:5002/api/employees/${id}`, {
+            const res = await fetch(`/api/employees/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)

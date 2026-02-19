@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Users, Rocket, Settings, Info, Lock, ChevronDown, Save, ArrowLeft } from 'lucide-react';
+import { Users, Rocket, Settings, Info, Lock, ChevronDown, Save, ArrowLeft, Shield } from 'lucide-react';
 
 const CreateRoleTemplate = () => {
     console.log('Rendering CreateRoleTemplate');
@@ -60,7 +60,7 @@ const CreateRoleTemplate = () => {
         const fetchInitialData = async () => {
             try {
                 // Fetch Departments
-                const deptRes = await fetch('http://localhost:5002/api/departments');
+                const deptRes = await fetch('/api/departments');
                 if (deptRes.ok) {
                     const data = await deptRes.json();
                     setDepartments(data);
@@ -69,7 +69,7 @@ const CreateRoleTemplate = () => {
                 // If Edit Mode, Fetch Role Data
                 if (isEditMode) {
                     console.log('Fetching role data for ID:', id);
-                    const roleRes = await fetch(`http://localhost:5002/api/roles/${id}`);
+                    const roleRes = await fetch(`/api/roles/${id}`);
                     if (roleRes.ok) {
                         const roleData = await roleRes.json();
                         setRoleName(roleData.name);
@@ -173,8 +173,8 @@ const CreateRoleTemplate = () => {
         };
 
         const url = isEditMode
-            ? `http://localhost:5002/api/roles/${id}`
-            : 'http://localhost:5002/api/roles';
+            ? `/api/roles/${id}`
+            : '/api/roles';
 
         const method = isEditMode ? 'PUT' : 'POST';
 
@@ -407,7 +407,10 @@ const CreateRoleTemplate = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%' }}>
                     <div style={{ backgroundColor: '#080c0f', border: '1px solid #1a2233', borderRadius: '12px', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <div style={{ padding: '20px', borderBottom: '1px solid #1a2233', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: 0 }}>Admin Panel</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Shield size={20} color="var(--accent-green)" />
+                                <h3 style={{ fontSize: '1.1rem', fontWeight: '600', margin: 0 }}>Admin Panel</h3>
+                            </div>
                             <div
                                 onClick={() => toggleSection('adminPanel')}
                                 style={{
