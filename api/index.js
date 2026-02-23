@@ -324,7 +324,7 @@ app.put('/api/roles/:id', async (req, res) => {
     }
 });
 
-const { sendWelcomeEmail } = require('./utils/emailService.cjs');
+const { sendWelcomeEmail } = require('./utils/emailService.js');
 
 // API Endpoint to Create Employee
 app.post('/api/employees', async (req, res) => {
