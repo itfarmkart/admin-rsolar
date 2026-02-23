@@ -107,22 +107,32 @@ async function initializeDatabase() {
 
         console.log('Employees table checked/created.');
 
-        // Departments Table
-        const createDepartmentsQuery = `
-            CREATE TABLE IF NOT EXISTS departments (
+        // Department Table
+        try {
+            const [tables] = await connection.query("SHOW TABLES LIKE 'departments'");
+            if (tables.length > 0) {
+                await connection.query("RENAME TABLE departments TO department");
+                console.log("Renamed 'departments' table to 'department'.");
+            }
+        } catch (err) {
+            console.error("Migration error (rename departments):", err);
+        }
+
+        const createDepartmentQuery = `
+            CREATE TABLE IF NOT EXISTS department (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(100) NOT NULL UNIQUE
             )
         `;
-        await connection.query(createDepartmentsQuery);
-        console.log('Departments table checked/created.');
+        await connection.query(createDepartmentQuery);
+        console.log('Department table checked/created.');
 
         // Seed Departments
-        const [deptRows] = await connection.query('SELECT COUNT(*) as count FROM departments');
+        const [deptRows] = await connection.query('SELECT COUNT(*) as count FROM department');
         if (deptRows[0].count === 0) {
             const defaultDepartments = ['Operations', 'Sales', 'Engineering', 'HR', 'Finance', 'Marketing'];
             const values = defaultDepartments.map(d => `('${d}')`).join(',');
-            await connection.query(`INSERT INTO departments (name) VALUES ${values}`);
+            await connection.query(`INSERT INTO department (name) VALUES ${values}`);
             console.log('Default departments seeded.');
         }
 
@@ -134,7 +144,7 @@ async function initializeDatabase() {
                 departmentId INT,
                 permissions JSON,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (departmentId) REFERENCES departments(id)
+                FOREIGN KEY (departmentId) REFERENCES department(id)
             )
         `;
         await connection.query(createRolesQuery);
@@ -161,7 +171,7 @@ app.get('/api/employees', async (req, res) => {
         const query = `
             SELECT e.*, d.name as departmentName, r.name as roleName, r.permissions as rolePermissions
             FROM employees e 
-            LEFT JOIN departments d ON e.departmentId = d.id 
+            LEFT JOIN department d ON e.departmentId = d.id 
             LEFT JOIN roles r ON e.roleId = r.id
             ORDER BY e.created_at DESC
         `;
@@ -197,14 +207,14 @@ app.get('/api/employees', async (req, res) => {
     }
 });
 
-// API Endpoint to Get Departments
-app.get('/api/departments', async (req, res) => {
+// API Endpoint to Get Department List
+app.get('/api/department', async (req, res) => {
     if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
     try {
-        const [rows] = await dbConnection.execute('SELECT * FROM departments ORDER BY name ASC');
+        const [rows] = await dbConnection.execute('SELECT * FROM department ORDER BY name ASC');
         res.json(rows);
     } catch (error) {
-        console.error('Error fetching departments:', error);
+        console.error('Error fetching department:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
@@ -243,7 +253,7 @@ app.get('/api/roles', async (req, res) => {
         const query = `
             SELECT r.*, d.name as departmentName, COUNT(e.id) as employeeCount
             FROM roles r
-            LEFT JOIN departments d ON r.departmentId = d.id
+            LEFT JOIN department d ON r.departmentId = d.id
             LEFT JOIN employees e ON r.id = e.roleId
             GROUP BY r.id
             ORDER BY r.created_at DESC
@@ -271,7 +281,7 @@ app.get('/api/roles/:id', async (req, res) => {
         const query = `
             SELECT r.*, d.name as departmentName 
             FROM roles r
-            LEFT JOIN departments d ON r.departmentId = d.id
+            LEFT JOIN department d ON r.departmentId = d.id
             WHERE r.id = ?
         `;
         const [rows] = await dbConnection.execute(query, [id]);
@@ -314,7 +324,7 @@ app.put('/api/roles/:id', async (req, res) => {
     }
 });
 
-const { sendWelcomeEmail } = require('./utils/emailService');
+const { sendWelcomeEmail } = require('./utils/emailService.cjs');
 
 // API Endpoint to Create Employee
 app.post('/api/employees', async (req, res) => {
@@ -367,7 +377,7 @@ app.get('/api/employees/:id', async (req, res) => {
         const query = `
             SELECT e.*, d.name as departmentName, r.name as roleName
             FROM employees e
-            LEFT JOIN departments d ON e.departmentId = d.id
+            LEFT JOIN department d ON e.departmentId = d.id
             LEFT JOIN roles r ON e.roleId = r.id
             WHERE e.id = ?
         `;

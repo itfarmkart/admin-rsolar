@@ -26,7 +26,7 @@ const EditEmployee = () => {
         const fetchData = async () => {
             try {
                 // Fetch Departments
-                const deptRes = await fetch('/api/departments');
+                const deptRes = await fetch('/api/department');
                 const deptData = await deptRes.json();
                 setDepartments(deptData);
 
@@ -208,7 +208,7 @@ const EditEmployee = () => {
                                 <div style={{ position: 'relative' }}>
                                     <select
                                         value={formData.departmentId}
-                                        onChange={(e) => setFormData({ ...formData, departmentId: e.target.value, role: '' })}
+                                        onChange={(e) => setFormData({ ...formData, departmentId: e.target.value, roleId: '' })}
                                         style={{
                                             width: '100%',
                                             backgroundColor: '#16191D',
@@ -280,7 +280,7 @@ const EditEmployee = () => {
                             onClick={async () => {
                                 if (window.confirm('Are you sure you want to deactivate this employee? They will lose access immediately.')) {
                                     try {
-                                        const res = await fetch(`http://localhost:5002/api/employees/${id}`, {
+                                        const res = await fetch(`/api/employees/${id}`, {
                                             method: 'PUT',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ ...formData, status: 'Inactive' })

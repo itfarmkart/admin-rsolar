@@ -23,7 +23,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
         const fetchData = async () => {
             try {
                 // Fetch Departments
-                const deptResponse = await fetch('/api/departments');
+                const deptResponse = await fetch('/api/department');
                 if (deptResponse.ok) {
                     const deptData = await deptResponse.json();
                     setDepartments(deptData);

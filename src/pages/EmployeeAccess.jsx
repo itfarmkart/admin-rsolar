@@ -13,7 +13,7 @@ const EmployeeAccess = () => {
 
     const fetchEmployees = async () => {
         try {
-            const response = await fetch('http://localhost:5002/api/employees');
+            const response = await fetch('/api/employees');
             if (response.ok) {
                 const data = await response.json();
                 setEmployees(data);

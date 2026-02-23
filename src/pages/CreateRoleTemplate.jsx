@@ -60,7 +60,7 @@ const CreateRoleTemplate = () => {
         const fetchInitialData = async () => {
             try {
                 // Fetch Departments
-                const deptRes = await fetch('/api/departments');
+                const deptRes = await fetch('/api/department');
                 if (deptRes.ok) {
                     const data = await deptRes.json();
                     setDepartments(data);
