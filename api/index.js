@@ -16,22 +16,30 @@ app.use((req, res, next) => {
     next();
 });
 
-// Global DB Connection
-let dbConnection;
+// Global DB Pool
+let pool;
 
 // Database configuration
 const dbConfig = {
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME, // Direct database selection
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 };
 
 async function initializeDatabase() {
     try {
-        const connection = await mysql.createConnection(dbConfig);
-        await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\``);
-        console.log(`Database ${process.env.DB_NAME} checked/created.`);
-        await connection.changeUser({ database: process.env.DB_NAME });
+        if (!pool) {
+            console.log(`Connecting to database: ${process.env.DB_NAME} at ${process.env.DB_HOST}`);
+            pool = mysql.createPool(dbConfig);
+        }
+
+        // Test connection
+        const connection = await pool.getConnection();
+        console.log('Database connection established.');
 
         // Employees Table
         const createEmployeesQuery = `
@@ -150,13 +158,36 @@ async function initializeDatabase() {
         await connection.query(createRolesQuery);
         console.log('Roles table checked/created.');
 
-        dbConnection = connection;
-        console.log('Database initialized and connected.');
+        connection.release();
+        console.log('Database initialized successfully.');
     } catch (error) {
-        console.error('Database initialization failed:', error);
-        process.exit(1);
+        console.error('Database initialization failed:', error.message);
+        // Don't exit process in serverless, let it retry on next request
+        if (process.env.NODE_ENV !== 'production') {
+            process.exit(1);
+        }
+        throw error;
     }
 }
+
+// Middleware to ensure DB is ready
+app.use(async (req, res, next) => {
+    // Skip health check
+    if (req.path === '/health') return next();
+
+    try {
+        if (!pool) {
+            await initializeDatabase();
+        }
+        next();
+    } catch (err) {
+        console.error('DB Middleware Error:', err.message);
+        res.status(503).json({
+            error: 'Database not ready',
+            details: 'The server is unable to connect to the database. Please check Vercel environment variables look correct.'
+        });
+    }
+});
 
 // Routes
 app.get('/health', (req, res) => {
@@ -165,7 +196,7 @@ app.get('/health', (req, res) => {
 
 // API Endpoint to Get Employees
 app.get('/api/employees', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         // updated query to join departments and get the name
         const query = `
@@ -175,7 +206,7 @@ app.get('/api/employees', async (req, res) => {
             LEFT JOIN roles r ON e.roleId = r.id
             ORDER BY e.created_at DESC
         `;
-        const [rows] = await dbConnection.execute(query);
+        const [rows] = await pool.execute(query);
 
         // Parse rolePermissions JSON
         const employees = rows.map(emp => {
@@ -209,9 +240,9 @@ app.get('/api/employees', async (req, res) => {
 
 // API Endpoint to Get Department List
 app.get('/api/department', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
-        const [rows] = await dbConnection.execute('SELECT * FROM department ORDER BY name ASC');
+        const [rows] = await pool.execute('SELECT * FROM department ORDER BY name ASC');
         res.json(rows);
     } catch (error) {
         console.error('Error fetching department:', error);
@@ -221,7 +252,7 @@ app.get('/api/department', async (req, res) => {
 
 // API Endpoint to Create Role
 app.post('/api/roles', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const { name, departmentId, permissions } = req.body;
 
@@ -237,7 +268,7 @@ app.post('/api/roles', async (req, res) => {
         // Store permissions as JSON string
         const permissionsJson = JSON.stringify(permissions);
 
-        const [result] = await dbConnection.execute(query, [name, departmentId, permissionsJson]);
+        const [result] = await pool.execute(query, [name, departmentId, permissionsJson]);
 
         res.status(201).json({ message: 'Role template created successfully', roleId: result.insertId });
     } catch (error) {
@@ -248,7 +279,7 @@ app.post('/api/roles', async (req, res) => {
 
 // API Endpoint to Get Roles
 app.get('/api/roles', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const query = `
             SELECT r.*, d.name as departmentName, COUNT(e.id) as employeeCount
@@ -258,7 +289,7 @@ app.get('/api/roles', async (req, res) => {
             GROUP BY r.id
             ORDER BY r.created_at DESC
         `;
-        const [rows] = await dbConnection.execute(query);
+        const [rows] = await pool.execute(query);
 
         // Parse permissions JSON
         const roles = rows.map(role => ({
@@ -276,7 +307,7 @@ app.get('/api/roles', async (req, res) => {
 // API Endpoint to Get Single Role
 app.get('/api/roles/:id', async (req, res) => {
     const { id } = req.params;
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const query = `
             SELECT r.*, d.name as departmentName 
@@ -284,7 +315,7 @@ app.get('/api/roles/:id', async (req, res) => {
             LEFT JOIN department d ON r.departmentId = d.id
             WHERE r.id = ?
         `;
-        const [rows] = await dbConnection.execute(query, [id]);
+        const [rows] = await pool.execute(query, [id]);
 
         if (rows.length === 0) return res.status(404).json({ error: 'Role not found' });
 
@@ -301,7 +332,7 @@ app.get('/api/roles/:id', async (req, res) => {
 // API Endpoint to Update Role
 app.put('/api/roles/:id', async (req, res) => {
     const { id } = req.params;
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const { name, departmentId, permissions } = req.body;
 
@@ -313,7 +344,7 @@ app.put('/api/roles/:id', async (req, res) => {
 
         const permissionsJson = JSON.stringify(permissions);
 
-        const [result] = await dbConnection.execute(query, [name, departmentId, permissionsJson, id]);
+        const [result] = await pool.execute(query, [name, departmentId, permissionsJson, id]);
 
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Role not found' });
 
@@ -328,7 +359,7 @@ const { sendWelcomeEmail } = require('./utils/emailService.js');
 
 // API Endpoint to Create Employee
 app.post('/api/employees', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const { fullName, email, departmentId, roleId, mobile } = req.body;
 
@@ -337,7 +368,7 @@ app.post('/api/employees', async (req, res) => {
         }
 
         // Generate Employee ID (e.g., EMP-1001)
-        const [rows] = await dbConnection.query('SELECT COUNT(*) as count FROM employees');
+        const [rows] = await pool.query('SELECT COUNT(*) as count FROM employees');
         const employeeId = `EMP-${1000 + rows[0].count + 1}`;
 
         const query = `
@@ -345,13 +376,13 @@ app.post('/api/employees', async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?)
         `;
 
-        await dbConnection.execute(query, [
+        await pool.execute(query, [
             fullName, employeeId, email, departmentId, roleId, mobile || null
         ]);
 
         // Send Welcome Email (Non-blocking)
         // Fetch role name and permissions for email
-        const [roleRows] = await dbConnection.query('SELECT name, permissions FROM roles WHERE id = ?', [roleId]);
+        const [roleRows] = await pool.query('SELECT name, permissions FROM roles WHERE id = ?', [roleId]);
         const roleName = roleRows[0]?.name || 'Employee';
         const rolePermissions = roleRows[0]?.permissions
             ? (typeof roleRows[0].permissions === 'string' ? JSON.parse(roleRows[0].permissions) : roleRows[0].permissions)
@@ -372,7 +403,7 @@ app.post('/api/employees', async (req, res) => {
 // API Endpoint to Get Single Employee
 app.get('/api/employees/:id', async (req, res) => {
     const { id } = req.params;
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const query = `
             SELECT e.*, d.name as departmentName, r.name as roleName
@@ -381,7 +412,7 @@ app.get('/api/employees/:id', async (req, res) => {
             LEFT JOIN roles r ON e.roleId = r.id
             WHERE e.id = ?
         `;
-        const [rows] = await dbConnection.execute(query, [id]);
+        const [rows] = await pool.execute(query, [id]);
 
         if (rows.length === 0) return res.status(404).json({ error: 'Employee not found' });
 
@@ -395,7 +426,7 @@ app.get('/api/employees/:id', async (req, res) => {
 // API Endpoint to Update Employee
 app.put('/api/employees/:id', async (req, res) => {
     const { id } = req.params;
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const { fullName, email, departmentId, roleId, status, mobile } = req.body;
 
@@ -405,7 +436,7 @@ app.put('/api/employees/:id', async (req, res) => {
             WHERE id = ?
         `;
 
-        await dbConnection.execute(query, [
+        await pool.execute(query, [
             fullName, email, departmentId || null, roleId, status, mobile, id
         ]);
 
@@ -421,7 +452,7 @@ app.put('/api/employees/:id', async (req, res) => {
 
 // API Endpoint for Login (Verify Admin Access)
 app.post('/api/login', async (req, res) => {
-    if (!dbConnection) return res.status(503).json({ error: 'Database not ready' });
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
         const { email } = req.body;
         if (!email) {
@@ -434,7 +465,7 @@ app.post('/api/login', async (req, res) => {
             LEFT JOIN roles r ON e.roleId = r.id
             WHERE e.email = ?
         `;
-        const [rows] = await dbConnection.execute(query, [email]);
+        const [rows] = await pool.execute(query, [email]);
 
         if (rows.length === 0) {
             return res.status(404).json({ error: 'Employee not found' });
@@ -482,10 +513,8 @@ if (process.env.NODE_ENV !== 'production' && require.main === module) {
         // Initialize DB after server starts (non-blocking)
         initializeDatabase();
     });
-} else {
-    // In serverless, database might need to be initialized differently or on-demand
-    // For Vercel, we export the app
-    initializeDatabase();
+    // In serverless, we don't call initializeDatabase here
+    // It will be called on-demand by the middleware
 }
 
 module.exports = app;
