@@ -45,7 +45,10 @@ const Login = () => {
                 localStorage.setItem('user', JSON.stringify(data.user));
                 navigate('/');
             } else {
-                alert(data.error || 'Login failed: Access Denied');
+                const errorMessage = data.details
+                    ? `${data.error}\n\nDetails: ${data.details}`
+                    : (data.error || 'Login failed: Access Denied');
+                alert(errorMessage);
             }
         } catch (error) {
             console.error('Login Process Error:', error);
