@@ -234,7 +234,7 @@ app.get('/api/employees', async (req, res) => {
         res.json(employees);
     } catch (error) {
         console.error('Error fetching employees:', error.message, error.stack);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(500).json({ error: 'Internal Server Error', details: error.message, stack: error.stack });
     }
 });
 
@@ -502,7 +502,7 @@ app.post('/api/login', async (req, res) => {
         });
     } catch (error) {
         console.error('Error logging in:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error', details: error.message, stack: error.stack });
     }
 });
 
@@ -516,5 +516,15 @@ if (process.env.NODE_ENV !== 'production' && require.main === module) {
     // In serverless, we don't call initializeDatabase here
     // It will be called on-demand by the middleware
 }
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        details: err.message,
+        stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
+    });
+});
 
 module.exports = app;
