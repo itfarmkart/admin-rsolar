@@ -27,8 +27,19 @@ const dbConfig = {
     database: process.env.DB_NAME, // Direct database selection
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    ssl: {
+        rejectUnauthorized: false // Often required for managed DBs on Vercel
+    }
 };
+
+console.log('DB Config initialized with keys:', Object.keys(dbConfig).filter(k => dbConfig[k] !== undefined));
+console.log('Environment Check:', {
+    hasHost: !!process.env.DB_HOST,
+    hasUser: !!process.env.DB_USER,
+    hasPass: !!process.env.DB_PASSWORD,
+    hasName: !!process.env.DB_NAME
+});
 
 async function initializeDatabase() {
     try {
@@ -42,19 +53,24 @@ async function initializeDatabase() {
         console.log('Database connection established.');
 
         // Employees Table
-        const createEmployeesQuery = `
-            CREATE TABLE IF NOT EXISTS employees (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                fullName VARCHAR(255) NOT NULL,
-                employeeId VARCHAR(50) NOT NULL UNIQUE,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                departmentId INT,
-                roleId INT,
-                status VARCHAR(20) DEFAULT 'Active',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `;
-        await connection.query(createEmployeesQuery);
+        try {
+            const createEmployeesQuery = `
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    fullName VARCHAR(255) NOT NULL,
+                    employeeId VARCHAR(50) NOT NULL UNIQUE,
+                    email VARCHAR(255) NOT NULL UNIQUE,
+                    departmentId INT,
+                    roleId INT,
+                    status VARCHAR(20) DEFAULT 'Active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `;
+            await connection.query(createEmployeesQuery);
+            console.log('Employees table checked/created.');
+        } catch (err) {
+            console.warn('DDL Warning (employees):', err.message);
+        }
 
         // Migration: Add departmentId if missing
         try {
@@ -126,14 +142,18 @@ async function initializeDatabase() {
             console.error("Migration error (rename departments):", err);
         }
 
-        const createDepartmentQuery = `
-            CREATE TABLE IF NOT EXISTS department (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL UNIQUE
-            )
-        `;
-        await connection.query(createDepartmentQuery);
-        console.log('Department table checked/created.');
+        try {
+            const createDepartmentQuery = `
+                CREATE TABLE IF NOT EXISTS department (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL UNIQUE
+                )
+            `;
+            await connection.query(createDepartmentQuery);
+            console.log('Department table checked/created.');
+        } catch (err) {
+            console.warn('DDL Warning (department):', err.message);
+        }
 
         // Seed Departments
         const [deptRows] = await connection.query('SELECT COUNT(*) as count FROM department');
@@ -144,19 +164,22 @@ async function initializeDatabase() {
             console.log('Default departments seeded.');
         }
 
-        // Roles Table
-        const createRolesQuery = `
-            CREATE TABLE IF NOT EXISTS roles (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                departmentId INT,
-                permissions JSON,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (departmentId) REFERENCES department(id)
-            )
-        `;
-        await connection.query(createRolesQuery);
-        console.log('Roles table checked/created.');
+        try {
+            const createRolesQuery = `
+                CREATE TABLE IF NOT EXISTS roles (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    departmentId INT,
+                    permissions JSON,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (departmentId) REFERENCES department(id)
+                )
+            `;
+            await connection.query(createRolesQuery);
+            console.log('Roles table checked/created.');
+        } catch (err) {
+            console.warn('DDL Warning (roles):', err.message);
+        }
 
         connection.release();
         console.log('Database initialized successfully.');
@@ -183,8 +206,8 @@ app.use(async (req, res, next) => {
     } catch (err) {
         console.error('DB Middleware Error:', err.message);
         res.status(503).json({
-            error: 'Database not ready',
-            details: 'The server is unable to connect to the database. Please check Vercel environment variables look correct.'
+            error: `Database connection failed: ${err.message}`,
+            details: `Failed to connect to ${process.env.DB_HOST} with user ${process.env.DB_USER}. Check if Vercel env vars are correct.`
         });
     }
 });
