@@ -25,6 +25,7 @@ const dbConfig = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME, // Direct database selection
+    port: parseInt(process.env.DB_PORT) || 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -36,9 +37,11 @@ const dbConfig = {
 console.log('DB Config initialized with keys:', Object.keys(dbConfig).filter(k => dbConfig[k] !== undefined));
 console.log('Environment Check:', {
     hasHost: !!process.env.DB_HOST,
+    hostValue: process.env.DB_HOST?.includes('localhost') ? 'localhost (WARN: will not work on Vercel)' : 'remote-host',
     hasUser: !!process.env.DB_USER,
     hasPass: !!process.env.DB_PASSWORD,
-    hasName: !!process.env.DB_NAME
+    hasName: !!process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT) || 3306
 });
 
 async function initializeDatabase() {
