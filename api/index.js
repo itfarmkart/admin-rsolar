@@ -532,6 +532,34 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// API Endpoint to Grant Admin Access manually (temp fix)
+app.get('/api/grant-admin', async (req, res) => {
+    if (!pool) return res.status(503).json({ error: 'Database not ready' });
+    try {
+        const email = 'akshayp@farmkart.com';
+
+        const [users] = await pool.execute('SELECT roleId FROM employees WHERE email = ?', [email]);
+        if (users.length === 0) {
+            return res.status(404).send('User not found in DB. Make sure they are created first.');
+        }
+        const roleId = users[0].roleId;
+        if (!roleId) {
+            return res.status(400).send('User has no role assigned.');
+        }
+
+        const query = `
+            UPDATE roles 
+            SET permissions = JSON_SET(COALESCE(permissions, '{}'), '$.adminPanel.enabled', true)
+            WHERE id = ?
+        `;
+        await pool.execute(query, [roleId]);
+        res.send('Admin permission granted successfully! You can now log in.');
+    } catch (error) {
+        console.error('Error granting admin:', error);
+        res.status(500).send('Error granting admin: ' + error.message);
+    }
+});
+
 // Start Server
 if (process.env.NODE_ENV !== 'production' && require.main === module) {
     app.listen(PORT, () => {
