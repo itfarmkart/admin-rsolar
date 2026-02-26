@@ -538,22 +538,37 @@ app.get('/api/grant-admin', async (req, res) => {
     try {
         const email = 'akshayp@farmkart.com';
 
-        const [users] = await pool.execute('SELECT roleId FROM employees WHERE email = ?', [email]);
+        const [users] = await pool.execute('SELECT e.roleId, r.permissions FROM employees e LEFT JOIN roles r ON e.roleId = r.id WHERE e.email = ?', [email]);
         if (users.length === 0) {
             return res.status(404).send('User not found in DB. Make sure they are created first.');
         }
         const roleId = users[0].roleId;
+        const currentPerms = users[0].permissions;
         if (!roleId) {
             return res.status(400).send('User has no role assigned.');
         }
 
+        let parsedPerms = {};
+        try {
+            parsedPerms = typeof currentPerms === 'string' ? JSON.parse(currentPerms || '{}') : (currentPerms || {});
+        } catch (e) { }
+
+        // Ensure adminPanel exists and is enabled
+        parsedPerms.adminPanel = parsedPerms.adminPanel || {};
+        parsedPerms.adminPanel.enabled = true;
+
         const query = `
             UPDATE roles 
-            SET permissions = JSON_SET(COALESCE(permissions, '{}'), '$.adminPanel.enabled', true)
+            SET permissions = ?
             WHERE id = ?
         `;
-        await pool.execute(query, [roleId]);
-        res.send('Admin permission granted successfully! You can now log in.');
+        await pool.execute(query, [JSON.stringify(parsedPerms), roleId]);
+
+        res.json({
+            message: 'Admin permission granted successfully! You can now log in.',
+            email: email,
+            newPermissions: parsedPerms
+        });
     } catch (error) {
         console.error('Error granting admin:', error);
         res.status(500).send('Error granting admin: ' + error.message);
