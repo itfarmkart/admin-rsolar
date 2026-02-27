@@ -536,7 +536,7 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/grant-admin', async (req, res) => {
     if (!pool) return res.status(503).json({ error: 'Database not ready' });
     try {
-        const email = 'akshayp@farmkart.com';
+        const email = req.query.email || 'akshayp@farmkart.com';
 
         const [users] = await pool.execute('SELECT e.roleId, r.permissions FROM employees e LEFT JOIN roles r ON e.roleId = r.id WHERE e.email = ?', [email]);
         if (users.length === 0) {
