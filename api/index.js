@@ -538,13 +538,29 @@ app.get('/api/grant-admin', async (req, res) => {
     try {
         const email = req.query.email || 'akshayp@farmkart.com';
 
-        const [users] = await pool.execute('SELECT e.roleId, r.permissions FROM employees e LEFT JOIN roles r ON e.roleId = r.id WHERE e.email = ?', [email]);
+        const [users] = await pool.execute('SELECT e.id as empId, e.roleId, r.id as validRoleId, r.permissions FROM employees e LEFT JOIN roles r ON e.roleId = r.id WHERE e.email = ?', [email]);
         if (users.length === 0) {
             return res.status(404).send('User not found in DB. Make sure they are created first.');
         }
-        const roleId = users[0].roleId;
-        const currentPerms = users[0].permissions;
-        if (!roleId) {
+
+        let roleId = users[0].roleId;
+        const validRoleId = users[0].validRoleId;
+        let currentPerms = users[0].permissions;
+        const empId = users[0].empId;
+
+        // If user has a roleId but it doesn't exist in the roles table (validRoleId is null)
+        if (roleId && !validRoleId) {
+            console.log(`User roleId ${roleId} is invalid. Finding a valid role...`);
+            const [roles] = await pool.execute('SELECT id, permissions FROM roles ORDER BY id ASC LIMIT 1');
+            if (roles.length > 0) {
+                roleId = roles[0].id;
+                currentPerms = roles[0].permissions;
+                await pool.execute('UPDATE employees SET roleId = ? WHERE id = ?', [roleId, empId]);
+                console.log(`Reassigned user to valid roleId ${roleId}`);
+            } else {
+                return res.status(400).send('No roles exist in the DB to assign!');
+            }
+        } else if (!roleId) {
             return res.status(400).send('User has no role assigned.');
         }
 
@@ -567,6 +583,7 @@ app.get('/api/grant-admin', async (req, res) => {
         res.json({
             message: 'Admin permission granted successfully! You can now log in.',
             email: email,
+            assignedRoleId: roleId,
             newPermissions: parsedPerms
         });
     } catch (error) {
